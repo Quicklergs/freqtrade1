@@ -477,3 +477,43 @@ def test_send_msg_discord(default_conf, mocker):
     assert "title" in msg_mock.call_args_list[0][0][0]["embeds"][0]
     assert "color" in msg_mock.call_args_list[0][0][0]["embeds"][0]
     assert "fields" in msg_mock.call_args_list[0][0][0]["embeds"][0]
+
+
+def test_wecom_payload_format(default_conf, mocker):
+    config = {
+        "enabled": True,
+        "url": "https://example.com",
+        "format": "json",
+        "status": {
+            "msgtype": "text",
+            "text": {
+                "content": "Status update: {status}"
+            }
+        }
+    }
+    default_conf["webhook"] = config
+
+    webhook = Webhook(RPC(get_patched_freqtradebot(mocker, default_conf)), default_conf)
+
+    msg = {
+        "type": RPCMessageType.STATUS,
+        "status": "running",
+    }
+
+    post = mocker.patch("freqtrade.rpc.webhook.post")  # mock 掉实际网络请求
+    webhook.send_msg(msg)
+
+    expected_payload = {
+        "msgtype": "text",
+        "text": {
+            "content": "Status update: running"
+        }
+    }
+
+    post.assert_called_once_with(
+        "https://example.com",
+        json=expected_payload,
+        timeout=10
+    )
+
+

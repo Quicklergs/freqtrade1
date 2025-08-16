@@ -80,6 +80,26 @@ When using the Form-Encoded or JSON-Encoded configuration you can configure any 
 
 The result would be a POST request with e.g. `Status: running` body and `Content-Type: text/plain` header.
 
+### Example: WeCom Webhook Configuration
+
+In addition to generic JSON formatting, `webhook` now supports payloads compatible with enterprise messaging tools such as **WeCom (WeChat Work)** and **DingTalk group bots**.
+
+```json
+"webhook": {
+    "enabled": true,
+    "url": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your_key",
+    "format": "json",
+    "status": {
+        "msgtype": "text",
+        "text": {
+            "content": "Status update: {status}"
+        }
+    }
+}
+```
+
+The result would be a POST request with e.g. `{"msgtype":"text","text":{"content":"Status update: running"}}` body and `Content-Type: application/json` header which results `Status update: running` message in the Mattermost channel.
+
 ## Additional configurations
 
 The `webhook.retries` parameter can be set for the maximum number of retries the webhook request should attempt if it is unsuccessful (i.e. HTTP response status is not 200). By default this is set to `0` which is disabled. An additional `webhook.retry_delay` parameter can be set to specify the time in seconds between retry attempts. By default this is set to `0.1` (i.e. 100ms). Note that increasing the number of retries or retry delay may slow down the trader if there are connectivity issues with the webhook.

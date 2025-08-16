@@ -81,6 +81,17 @@ class Webhook(RPCHandler):
             return None
         return valuedict
 
+    # 增加递归格式化方法,支持微信和钉钉的webhook 嵌套方式配置
+    def recursive_format(self, obj, msg):
+        if isinstance(obj, dict):
+            return {k: self.recursive_format(v, msg) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self.recursive_format(item, msg) for item in obj]
+        elif isinstance(obj, str):
+            return obj.format(**msg)
+        else:
+            return obj
+
     def send_msg(self, msg: RPCSendMsg) -> None:
         """Send a message to telegram channel"""
         try:
@@ -90,7 +101,7 @@ class Webhook(RPCHandler):
                 logger.debug("Message type '%s' not configured for webhooks", msg["type"])
                 return
 
-            payload = {key: value.format(**msg) for (key, value) in valuedict.items()}
+            payload = self.recursive_format(valuedict, msg)
             self._send_msg(payload)
         except KeyError as exc:
             logger.exception(
