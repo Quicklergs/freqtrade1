@@ -118,6 +118,19 @@ class MarketCapPairList(IPairList):
             },
         }
 
+    def get_markets_cache(self):
+        markets = self._marketcap_cache.get("markets")
+        if not markets:
+            markets = [
+                k
+                for k in self._exchange.get_markets(
+                    quote_currencies=[self._stake_currency], tradable_only=True, active_only=True
+                ).keys()
+            ]
+            self._marketcap_cache["markets"] = markets.copy()
+
+        return markets.copy()
+
     def gen_pairlist(self, tickers: Tickers) -> list[str]:
         """
         Generate the pairlist
@@ -133,12 +146,8 @@ class MarketCapPairList(IPairList):
         else:
             # Use fresh pairlist
             # Check if pair quote currency equals to the stake currency.
-            _pairlist = [
-                k
-                for k in self._exchange.get_markets(
-                    quote_currencies=[self._stake_currency], tradable_only=True, active_only=True
-                ).keys()
-            ]
+            _pairlist = self.get_markets_cache()
+
             # No point in testing for blacklisted pairs...
             _pairlist = self.verify_blacklist(_pairlist, logger.info)
 
@@ -146,6 +155,31 @@ class MarketCapPairList(IPairList):
             self._marketcap_cache["pairlist_mc"] = pairlist.copy()
 
         return pairlist
+
+    # Prefixes to test to discover coins like 1000PEPE/USDDT:USDT or KPEPE/USDC (hyperliquid)
+    prefixes = ("1000", "K")
+
+    def resolve_marketcap_pair(
+        self,
+        pair: str,
+        pairlist: list[str],
+        markets: list[str],
+        filtered_pairlist: list[str],
+    ) -> str | None:
+        if pair in filtered_pairlist:
+            return None
+
+        if pair in pairlist:
+            return pair
+
+        if pair not in markets:
+            for prefix in self.prefixes:
+                test_prefix = f"{prefix}{pair}"
+
+                if test_prefix in pairlist:
+                    return test_prefix
+
+        return None
 
     def filter_pairlist(self, pairlist: list[str], tickers: dict) -> list[str]:
         """
@@ -189,7 +223,7 @@ class MarketCapPairList(IPairList):
                 self._marketcap_cache["marketcap"] = marketcap_list
 
         if marketcap_list:
-            filtered_pairlist = []
+            filtered_pairlist: list[str] = []
 
             market = self._config["trading_mode"]
             pair_format = f"{self._stake_currency.upper()}"
@@ -197,13 +231,17 @@ class MarketCapPairList(IPairList):
                 pair_format += f":{self._stake_currency.upper()}"
 
             top_marketcap = marketcap_list[: self._max_rank :]
+            markets = self.get_markets_cache()
 
             for mc_pair in top_marketcap:
-                test_pair = f"{mc_pair.upper()}/{pair_format}"
-                if test_pair in pairlist and test_pair not in filtered_pairlist:
-                    filtered_pairlist.append(test_pair)
-                    if len(filtered_pairlist) == self._number_assets:
-                        break
+                pair = f"{mc_pair.upper()}/{pair_format}"
+                resolved = self.resolve_marketcap_pair(pair, pairlist, markets, filtered_pairlist)
+
+                if resolved:
+                    filtered_pairlist.append(resolved)
+
+                if len(filtered_pairlist) == self._number_assets:
+                    break
 
             if len(filtered_pairlist) > 0:
                 return filtered_pairlist
